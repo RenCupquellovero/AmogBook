@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QListWidget,
-    QTextEdit, QInputDialog, QMessageBox
+    QTextEdit, QInputDialog, QMessageBox, QDialog, QFormLayout
 )
 from PyQt6.QtCore import Qt
 from datetime import datetime
@@ -15,11 +15,11 @@ CREWMATE_COLORS = [
 class DetectiveNotebook(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AmogBook")
+        self.setWindowTitle("Detective Notebook v1.0")
         self.setGeometry(100, 100, 500, 600)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
-        self.cases = {}
+        self.cases = {}  # case_id: {victim, location, suspects, notes}
         self.sus_levels = {}
 
         self.tabs = QTabWidget()
@@ -29,6 +29,11 @@ class DetectiveNotebook(QWidget):
 
         layout = QVBoxLayout()
         layout.addWidget(self.tabs)
+
+        version_label = QLabel("Version 1.0")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(version_label)
+
         self.setLayout(layout)
 
     def init_case_tab(self):
@@ -52,7 +57,12 @@ class DetectiveNotebook(QWidget):
             layout.addWidget(box)
             self.suspect_boxes.append(box)
 
+        self.notes_input = QLineEdit()
+        layout.addWidget(QLabel("Notes"))
+        layout.addWidget(self.notes_input)
+
         self.case_list = QListWidget()
+        self.case_list.itemDoubleClicked.connect(self.view_case)
         layout.addWidget(self.case_list)
 
         btn_row = QHBoxLayout()
@@ -72,6 +82,7 @@ class DetectiveNotebook(QWidget):
         layout = QVBoxLayout()
 
         self.sus_list = QListWidget()
+        self.sus_list.itemDoubleClicked.connect(self.edit_sus)
         layout.addWidget(self.sus_list)
 
         btn_row = QHBoxLayout()
@@ -104,11 +115,17 @@ class DetectiveNotebook(QWidget):
         victim = self.victim_box.currentText()
         location = self.location_input.text()
         suspects = [box.currentText() for box in self.suspect_boxes if box.currentText()]
+        notes = self.notes_input.text()
         if not location:
             QMessageBox.warning(self, "Missing Info", "Location is required.")
             return
         case_id = f"{victim} @ {location} ({datetime.now().strftime('%H:%M:%S')})"
-        self.cases[case_id] = {"victim": victim, "location": location, "suspects": suspects}
+        self.cases[case_id] = {
+            "victim": victim,
+            "location": location,
+            "suspects": suspects,
+            "notes": notes
+        }
         self.case_list.addItem(case_id)
 
     def remove_case(self):
@@ -118,11 +135,62 @@ class DetectiveNotebook(QWidget):
             del self.cases[cid]
             self.case_list.takeItem(self.case_list.row(selected))
 
+    def view_case(self, item):
+        cid = item.text()
+        case = self.cases[cid]
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("View/Edit Case")
+        layout = QFormLayout()
+
+        victim = QComboBox()
+        victim.addItems(CREWMATE_COLORS)
+        victim.setCurrentText(case["victim"])
+        layout.addRow("Victim", victim)
+
+        location = QLineEdit(case["location"])
+        layout.addRow("Location", location)
+
+        suspects = []
+        for i in range(4):
+            box = QComboBox()
+            box.addItems([""] + CREWMATE_COLORS)
+            if i < len(case["suspects"]):
+                box.setCurrentText(case["suspects"][i])
+            layout.addRow(f"Suspect {i+1}", box)
+            suspects.append(box)
+
+        notes = QLineEdit(case.get("notes", ""))
+        layout.addRow("Notes", notes)
+
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(lambda: self.update_case(cid, victim, location, suspects, notes, dialog))
+        layout.addRow(save_btn)
+
+        dialog.setLayout(layout)
+        dialog.exec()
+
+    def update_case(self, cid, victim, location, suspects, notes, dialog):
+        self.cases[cid] = {
+            "victim": victim.currentText(),
+            "location": location.text(),
+            "suspects": [s.currentText() for s in suspects if s.currentText()],
+            "notes": notes.text()
+        }
+        dialog.accept()
+
     def set_sus(self):
         color, ok = QInputDialog.getItem(self, "Set Sus", "Crewmate color:", CREWMATE_COLORS, 0, False)
         if not ok:
             return
         level, ok = QInputDialog.getDouble(self, "Sus Level", f"{color} sus %:", 50, 0, 100, 1)
+        if ok:
+            self.sus_levels[color] = level
+            self.refresh_sus_list()
+
+    def edit_sus(self, item):
+        color = item.text().split(":")[0]
+        level, ok = QInputDialog.getDouble(self, "Edit Sus", f"{color} sus %:", self.sus_levels[color], 0, 100, 1)
         if ok:
             self.sus_levels[color] = level
             self.refresh_sus_list()
