@@ -15,7 +15,7 @@ CREWMATE_COLORS = [
 class DetectiveNotebook(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Detective Notebook v1.0")
+        self.setWindowTitle("AmogBook v1.0")
         self.setGeometry(100, 100, 500, 600)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
@@ -218,3 +218,4 @@ if __name__ == "__main__":
     window = DetectiveNotebook()
     window.show()
     sys.exit(app.exec())
+
